@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Авторизация | Mordor RP Форум</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; }
+        body { background-color: #141414; color: #e2e2e2; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+        .auth-container { background-color: #1d1d1d; border: 1px solid #2d2d2d; border-radius: 4px; width: 100%; max-width: 420px; overflow: hidden; }
+        .auth-header { background-color: #c82323; color: #ffffff; padding: 15px 20px; font-size: 18px; border-bottom: 1px solid #9c1a1a; text-shadow: 1px 1px 1px rgba(0,0,0,0.5); }
+        .auth-body { padding: 25px 20px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #aaaaaa; font-size: 14px; }
+        input { width: 100%; padding: 10px 12px; background-color: #262626; border: 1px solid #3d3d3d; border-radius: 4px; color: #ffffff; font-size: 15px; outline: none; }
+        input:focus { border-color: #c82323; }
+        button { width: 100%; padding: 12px; background-color: #c82323; border: 1px solid #9c1a1a; border-radius: 4px; color: #ffffff; font-size: 15px; cursor: pointer; transition: background-color 0.2s; }
+        button:hover { background-color: #b01e1e; }
+        .toggle-form { text-align: center; margin-top: 20px; font-size: 13px; color: #8c8c8c; }
+        .toggle-form span { color: #c82323; cursor: pointer; margin-left: 5px; }
+        .toggle-form span:hover { text-decoration: underline; }
+        .error-msg { color: #ff4c4c; background-color: rgba(200, 35, 35, 0.1); border: 1px solid #c82323; padding: 12px; border-radius: 4px; margin-bottom: 20px; font-size: 14px; display: none; text-align: center; }
+        .success-msg { color: #2ed573; background-color: rgba(46, 213, 115, 0.1); border: 1px solid #2ed573; padding: 12px; border-radius: 4px; margin-bottom: 20px; font-size: 14px; display: none; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="auth-container">
+        <div class="auth-body" style="padding-bottom: 0;">
+            <div id="error-box" class="error-msg"></div>
+            <div id="success-box" class="success-msg"></div>
+        </div>
+
+        <div id="login-form-container">
+            <div class="auth-header">Авторизация | Вход</div>
+            <div class="auth-body">
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="login-nickname">Игровой никнейм</label>
+                        <input type="text" id="login-nickname" required placeholder="Пример: Name_Surname">
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Пароль</label>
+                        <input type="password" id="login-password" required placeholder="Введите ваш пароль">
+                    </div>
+                    <button type="submit">Войти в аккаунт</button>
+                </form>
+                <div class="toggle-form">Впервые тут? <span id="go-to-register">Создать аккаунт</span></div>
+            </div>
+        </div>
+
+        <div id="register-form-container" style="display: none;">
+            <div class="auth-header">Регистрация нового пользователя</div>
+            <div class="auth-body">
+                <form id="register-form">
+                    <div class="form-group">
+                        <label for="register-nickname">Желаемый никнейм</label>
+                        <input type="text" id="register-nickname" required placeholder="Пример: Name_Surname">
+                    </div>
+                    <div class="form-group">
+                        <label for="register-password">Пароль</label>
+                        <input type="password" id="register-password" required placeholder="Придумайте сложный пароль">
+                    </div>
+                    <button type="submit">Зарегистрироваться</button>
+                </form>
+                <div class="toggle-form">Уже есть профиль? <span id="go-to-login">Вернуться ко входу</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://efnqviavjpkcvhxbvbkq.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'sb_publishable_P0y1T9rS5WUGBW8ezCaCyA_7Xc87imK';
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const loginContainer = document.getElementById('login-form-container');
+        const registerContainer = document.getElementById('register-form-container');
+        const errorBox = document.getElementById('error-box');
+        const successBox = document.getElementById('success-box');
+
+        document.getElementById('go-to-register').addEventListener('click', () => switchForm(registerContainer, loginContainer));
+        document.getElementById('go-to-login').addEventListener('click', () => switchForm(loginContainer, registerContainer));
+
+        function switchForm(showTarget, hideTarget) { hideMessages(); hideTarget.style.display = 'none'; showTarget.style.display = 'block'; }
+        function showMessage(type, text) { hideMessages(); if (type === 'error') { errorBox.innerText = text; errorBox.style.display = 'block'; } else { successBox.innerText = text; successBox.style.display = 'block'; } }
+        function hideMessages() { errorBox.style.display = 'none'; successBox.style.display = 'none'; }
+
+        // Проверка бана и сохранение сессии
+        async function checkBanAndProcessSession(user) {
+            const { data: banData } = await _supabase.from('banned_users').select('user_id').eq('user_id', user.id).maybeSingle();
+            const isBanned = !!banData;
+
+            localStorage.setItem('forum_session', JSON.stringify({
+                id: user.id,
+                nickname: user.nickname,
+                status: user.status,
+                is_banned: isBanned
+            }));
+
+            if (isBanned) {
+                alert('Внимание: Ваш аккаунт заблокирован на форуме. У вас не будет возможности публиковать новые темы и оставлять ответы.');
+            }
+            window.location.href = 'forum.html';
+        }
+
+        // Регистрация
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideMessages();
+            const nickname = document.getElementById('register-nickname').value.trim();
+            const password = document.getElementById('register-password').value;
+
+            try {
+                const { data: ext } = await _supabase.from('profiles').select('nickname').eq('nickname', nickname).maybeSingle();
+                if (ext) { showMessage('error', 'Этот никнейм уже занят!'); return; }
+
+                const { data: newUser, error: insErr } = await _supabase
+                    .from('profiles')
+                    .insert([{ nickname: nickname, password: password, status: 'user' }])
+                    .select('id, nickname, status')
+                    .single();
+
+                if (insErr) throw insErr;
+                showMessage('success', 'Вы успешно зарегистрированы!');
+                setTimeout(() => checkBanAndProcessSession(newUser), 1000);
+            } catch (err) { showMessage('error', 'Ошибка: ' + err.message); }
+        });
+
+        // Вход
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideMessages();
+            const nickname = document.getElementById('login-nickname').value.trim();
+            const password = document.getElementById('login-password').value;
+
+            try {
+                const { data: user } = await _supabase.from('profiles').select('*').eq('nickname', nickname).maybeSingle();
+                if (!user || user.password !== password) { showMessage('error', 'Неверный никнейм или пароль!'); return; }
+                await checkBanAndProcessSession(user);
+            } catch (err) { showMessage('error', 'Ошибка: ' + err.message); }
+        });
+    </script>
+</body>
+</html>

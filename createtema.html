@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Создать тему | Mordor Role Play</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; }
+        body { background-color: #141414; color: #e2e2e2; padding: 20px; }
+        .container { max-width: 850px; width: 100%; margin: 20px auto; }
+        .btn-back { background-color: #1d1d1d; border: 1px solid #2d2d2d; color: #aaaaaa; text-decoration: none; padding: 6px 12px; border-radius: 4px; font-size: 13px; }
+        .form-block { background-color: #1d1d1d; border: 1px solid #2d2d2d; border-radius: 4px; overflow: hidden; margin-top: 15px; }
+        .form-header { background-color: #c82323; color: #ffffff; padding: 12px 15px; font-size: 16px; font-weight: bold; display: flex; justify-content: space-between; }
+        .form-body { padding: 20px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #aaaaaa; font-size: 14px; }
+        input, select, textarea { width: 100%; padding: 10px 12px; background-color: #262626; border: 1px solid #3d3d3d; border-radius: 4px; color: #ffffff; font-size: 15px; outline: none; }
+        textarea { height: 200px; resize: vertical; }
+        .btn-submit { background-color: #c82323; border: 1px solid #9c1a1a; color: #ffffff; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-submit:disabled { background-color: #4b4b4b; border-color: #333; cursor: not-allowed; }
+        .alert { padding: 12px; border-radius: 4px; margin-bottom: 15px; font-size: 14px; display: none; text-align: center; }
+        .alert.error { color: #ff4c4c; background-color: rgba(200, 35, 35, 0.1); border: 1px solid #c82323; }
+        .alert.success { color: #2ed573; background-color: rgba(46, 213, 115, 0.1); border: 1px solid #2ed573; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <a href="forum.html" class="btn-back">← Назад</a>
+        <div id="alert-box" class="alert"></div>
+
+        <div class="form-block">
+            <div class="form-header">
+                <span id="block-title">Создание новой темы</span>
+                <span id="status-indicator">Режим: Публикация</span>
+            </div>
+            <div class="form-body">
+                <form id="post-thread-form">
+                    <div class="form-group">
+                        <label>Раздел форума</label>
+                        <select id="thread-category">
+                            <option value="1">Новости проекта</option>
+                            <option value="2" selected>Раздел жалоб</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Заголовок темы</label>
+                        <input type="text" id="thread-title" required placeholder="Введите заголовок...">
+                    </div>
+                    <div class="form-group">
+                        <label>Текст публикации</label>
+                        <textarea id="thread-content" required placeholder="Ваш текст..."></textarea>
+                    </div>
+                    <button type="submit" id="btn-save" class="btn-submit">Опубликовать тему</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://efnqviavjpkcvhxbvbkq.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'sb_publishable_P0y1T9rS5WUGBW8ezCaCyA_7Xc87imK';
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const session = JSON.parse(localStorage.getItem('forum_session'));
+        if (!session) { window.location.href = 'index.html'; }
+
+        let isEditMode = false;
+        let threadId = null;
+
+        // Визуальная блокировка элементов интерфейса при загрузке страницы, если пользователь в бане
+        window.addEventListener('DOMContentLoaded', () => {
+            if (session.is_banned) {
+                const alertBox = document.getElementById('alert-box');
+                alertBox.className = "alert error";
+                alertBox.innerText = "Доступ ограничен! Вы заблокированы и не можете создавать или редактировать темы.";
+                alertBox.style.display = 'block';
+
+                // Отключаем поля ввода и кнопку отправки
+                document.getElementById('thread-category').disabled = true;
+                document.getElementById('thread-title').disabled = true;
+                document.getElementById('thread-content').disabled = true;
+                document.getElementById('btn-save').disabled = true;
+                document.getElementById('btn-save').innerText = 'Создание заблокировано';
+            }
+        });
+
+        document.getElementById('post-thread-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const alertBox = document.getElementById('alert-box');
+            alertBox.style.display = 'none';
+
+            // Жесткая проверка на бан перед отправкой (если забаненный юзер включит элементы через код элемента)
+            if (session.is_banned) {
+                alertBox.className = "alert error";
+                alertBox.innerText = "Действие заблокировано! Вы находитесь в черном списке и не можете взаимодействовать с форумом.";
+                alertBox.style.display = 'block';
+                return;
+            }
+
+            const categoryId = parseInt(document.getElementById('thread-category').value);
+            const title = document.getElementById('thread-title').value.trim();
+            const content = document.getElementById('thread-content').value.trim();
+
+            if (session.status === 'user' && categoryId === 1) {
+                alertBox.className = "alert error";
+                alertBox.innerText = "Только модераторы публикуют темы в «Новости проекта»!";
+                alertBox.style.display = 'block';
+                return;
+            }
+
+            try {
+                if (!isEditMode) {
+                    const { data, error } = await _supabase.from('threads').insert([{ title: title, content: content, category_id: categoryId, author_id: session.id }]).select('id').single();
+                    if (error) throw error;
+                    threadId = data.id;
+                    isEditMode = true;
+                    document.getElementById('block-title').innerText = 'Редактирование созданной темы';
+                    document.getElementById('status-indicator').innerText = 'Режим: Редактирование';
+                    document.getElementById('btn-save').innerText = 'Сохранить изменения';
+                    alertBox.className = "alert success";
+                    alertBox.innerText = "Тема успешно сохранена!";
+                    alertBox.style.display = 'block';
+                } else {
+                    const { error } = await _supabase.from('threads').update({ title: title, content: content, category_id: categoryId }).eq('id', threadId);
+                    if (error) throw error;
+                    alertBox.className = "alert success";
+                    alertBox.innerText = "Изменения применены!";
+                    alertBox.style.display = 'block';
+                }
+            } catch(err) { alert(err.message); }
+        });
+    </script>
+</body>
+</html>

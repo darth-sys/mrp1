@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fake Mordor Role Play | Форум</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; }
+        body { background-color: #141414; color: #e2e2e2; display: flex; flex-direction: column; min-height: 100vh; }
+        header { background-color: #1d1d1d; border-bottom: 3px solid #c82323; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
+        .logo-m::before { content: 'M'; background-color: #c82323; padding: 2px 12px; border-radius: 4px; font-weight: bold; color: #fff; margin-right: 5px; }
+        .nav-right { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+        .user-nick { color: #ffffff; font-weight: bold; }
+        .role-badge { font-size: 11px; padding: 2px 6px; border-radius: 3px; font-weight: bold; text-transform: uppercase; color: #fff; background-color: #4b4b4b; }
+        .role-badge.moder { background-color: #c82323; }
+        .logout-btn { background: none; border: 1px solid #3d3d3d; color: #aaaaaa; padding: 4px 8px; border-radius: 3px; cursor: pointer; }
+        .container { max-width: 900px; width: 100%; margin: 15px auto; padding: 0 10px; flex: 1; }
+        .action-bar { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 15px; }
+        .create-btn { background-color: #c82323; color: #ffffff; border: 1px solid #9c1a1a; padding: 8px 16px; border-radius: 4px; font-size: 14px; cursor: pointer; text-decoration: none; }
+        .tabs-menu { background-color: #1d1d1d; border: 1px solid #2d2d2d; border-radius: 4px; padding: 10px; margin-bottom: 15px; display: flex; gap: 8px; }
+        .tab-item { flex: 1; text-align: center; background-color: #262626; border: 1px solid #3d3d3d; color: #e2e2e2; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; }
+        .tab-item.active { background-color: #c82323; border-color: #9c1a1a; }
+        .category-block { background-color: #1d1d1d; border: 1px solid #2d2d2d; border-radius: 4px; overflow: hidden; }
+        .category-title { background-color: #c82323; color: #ffffff; padding: 10px 15px; font-size: 15px; font-weight: bold; }
+        .thread-row { display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #2d2d2d; cursor: pointer; }
+        .thread-row:hover { background-color: #232323; }
+        .thread-icon::before { content: '💬'; font-size: 20px; margin-right: 15px; }
+        .thread-title-text { font-size: 15px; color: #e2e2e2; font-weight: bold; }
+        .thread-meta { font-size: 12px; color: #8c8c8c; margin-top: 4px; }
+        .moder-panel { background-color: #1d1515; border: 1px solid #c82323; border-radius: 4px; padding: 15px; margin-bottom: 20px; }
+        .user-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #2d2d2d; font-size: 13px; }
+        .ban-btn { background-color: #c82323; border: none; color: white; padding: 3px 8px; border-radius: 3px; cursor: pointer; }
+        .ban-btn.unban { background-color: #2ed573; } /* Зеленая кнопка разбана */
+        .online-block { background-color: #1d1d1d; border: 1px solid #2d2d2d; border-radius: 4px; padding: 15px; margin-top: 20px; }
+        .online-title { font-size: 14px; font-weight: bold; border-bottom: 1px solid #2d2d2d; padding-bottom: 8px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-m" style="color:#fff; font-weight:bold; font-size:20px;"></div>
+        <div class="nav-right">
+            <span class="user-nick" id="header-nickname">Gamer</span>
+            <span class="role-badge" id="header-role">USER</span>
+            <button class="logout-btn" onclick="localStorage.clear(); window.location.reload();">Выйти</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="action-bar">
+            <div style="font-size: 14px; color:#aaa;" id="welcome-message">Добро пожаловать! Форум создан нейросетью – <a href="https://forum.mordor-rp.com/index.php" target="_blank" rel="noopener noreferrer">оригинальный сайт
+</a></div>
+            <a href="createtema.html" id="global-create-btn" class="create-btn">Создать тему...</a>
+        </div>
+
+        <div class="tabs-menu">
+            <div class="tab-item active" id="tab-1" onclick="switchSection(1)">Новости проекта</div>
+            <div class="tab-item" id="tab-2" onclick="switchSection(2)">Раздел жалоб</div>
+        </div>
+
+        <div id="moderator-section" class="moder-panel" style="display: none;">
+            <h3 style="color:#ff4c4c; font-size:14px; margin-bottom:10px;">ПАНЕЛЬ МОДЕРАТОРА</h3>
+            <div id="moder-users-container"></div>
+        </div>
+
+        <div class="category-block">
+            <div class="category-title" id="current-category-name">Новости проекта</div>
+            <div id="threads-wrapper"></div>
+        </div>
+
+        <div class="online-block">
+            <div class="online-title">Пользователи онлайн</div>
+            <div id="online-list-box" style="font-size: 13px; color:#aaa;"></div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://efnqviavjpkcvhxbvbkq.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'sb_publishable_P0y1T9rS5WUGBW8ezCaCyA_7Xc87imK';
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const session = JSON.parse(localStorage.getItem('forum_session'));
+        if (!session) { window.location.href = 'index.html'; }
+
+        let activeCategoryId = 1;
+        let blacklist = [];
+
+        document.getElementById('header-nickname').innerText = session.nickname;
+        document.getElementById('header-role').innerText = session.status.toUpperCase();
+        if(session.status === 'moder') {
+            document.getElementById('header-role').classList.add('moder');
+            document.getElementById('moderator-section').style.display = 'block';
+        }
+        if(session.is_banned) {
+            document.getElementById('welcome-message').innerHTML = '<b style="color:#ff4c4c;">ВАШ АККАУНТ ЗАБЛОКИРОВАН</b>';
+            document.getElementById('global-create-btn').style.display = 'none';
+        }
+
+        function switchSection(catId) {
+            activeCategoryId = catId;
+            document.getElementById('tab-1').classList.toggle('active', catId === 1);
+            document.getElementById('tab-2').classList.toggle('active', catId === 2);
+            document.getElementById('current-category-name').innerText = catId === 1 ? 'Новости проекта' : 'Раздел жалоб';
+            
+            const createBtn = document.getElementById('global-create-btn');
+            if (session.is_banned || (activeCategoryId === 1 && session.status !== 'moder')) {
+                createBtn.style.display = 'none';
+            } else {
+                createBtn.style.display = 'inline-block';
+            }
+            getThreads();
+        }
+
+        async function getThreads() {
+            const container = document.getElementById('threads-wrapper');
+            container.innerHTML = '<p style="padding:15px; color:#666;">Загрузка...</p>';
+            const { data: threads } = await _supabase.from('threads').select('*, profiles!threads_author_id_fkey(nickname)').eq('category_id', activeCategoryId).order('created_at', {ascending: false});
+            
+            container.innerHTML = '';
+            if(!threads || threads.length === 0) { container.innerHTML = '<p style="padding:15px; color:#666;">Тем нет.</p>'; return; }
+            
+            threads.forEach(t => {
+                const row = document.createElement('div');
+                row.className = 'thread-row';
+                // ПЕРЕХОД ИСПРАВЛЕН: Передаем строковый ID (UUID) темы без изменений
+                row.onclick = () => window.location.href = `view.html?id=${t.id}`;
+                row.innerHTML = `
+                    <div class="thread-icon"></div>
+                    <div>
+                        <div class="thread-title-text">${t.title} ${t.is_closed ? '<span style="background:#555; font-size:10px; padding:1px 4px; border-radius:2px;">Закрыто</span>' : ''}</div>
+                        <div class="thread-meta">Автор: ${t.profiles?.nickname || 'Система'} | ${new Date(t.created_at).toLocaleString('ru-RU')}</div>
+                    </div>`;
+                container.appendChild(row);
+            });
+        }
+
+        async function loadModerPanel() {
+            if(session.status !== 'moder') return;
+            const { data: bans } = await _supabase.from('banned_users').select('user_id');
+            blacklist = bans?.map(b => b.user_id) || [];
+
+            const { data: users } = await _supabase.from('profiles').select('*').eq('status', 'user');
+            const container = document.getElementById('moder-users-container');
+            container.innerHTML = '';
+
+            users?.forEach(u => {
+                const banned = blacklist.includes(u.id);
+                const row = document.createElement('div');
+                row.className = 'user-row';
+                // ИСПРАВЛЕНО: Теперь кнопка либо банит, либо разбанивает пользователя в зависимости от статуса
+                row.innerHTML = `<span>${u.nickname}</span>
+                    <button class="ban-btn ${banned ? 'unban' : ''}" onclick="toggleBan('${u.id}', ${banned})">
+                        ${banned ? 'Разбанить' : 'Забанить'}
+                    </button>`;
+                container.appendChild(row);
+            });
+        }
+
+        // НОВАЯ ФУНКЦИЯ: Управление блокировкой (Бан / Разбан)
+        async function toggleBan(id, isBanned) {
+            if (isBanned) {
+                if(!confirm('Разблокировать пользователя?')) return;
+                await _supabase.from('banned_users').delete().eq('user_id', id);
+            } else {
+                if(!confirm('Забанить пользователя?')) return;
+                await _supabase.from('banned_users').insert([{user_id: id}]);
+            }
+            loadModerPanel();
+        }
+
+        async function loadOnline() {
+            const { data } = await _supabase.from('profiles').select('nickname');
+            document.getElementById('online-list-box').innerText = data?.map(u => u.nickname).join(', ') || '';
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            switchSection(1);
+            loadOnline();
+            loadModerPanel();
+            _supabase.channel('custom-filter-channel').on('postgres_changes', { event: '*', filter: 'table=eq.threads' }, () => getThreads()).subscribe();
+        });
+    </script>
+</body>
+</html>
